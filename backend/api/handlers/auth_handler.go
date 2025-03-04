@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/benjamingetches/govtrack/api/models"
-	"github.com/form3tech-oss/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -32,13 +32,18 @@ func NewAuthHandler(client *mongo.Client) *AuthHandler {
 // Login handles user login
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	fmt.Println("Login request received")
 
 	var loginReq models.LoginRequest
 	err := json.NewDecoder(r.Body).Decode(&loginReq)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		fmt.Printf("Error decoding login request: %v\n", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
 		return
 	}
+
+	fmt.Printf("Login attempt for email: %s\n", loginReq.Email)
 
 	// Find user by email
 	var user models.User
@@ -48,26 +53,38 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	err = h.collection.FindOne(ctx, bson.M{"email": loginReq.Email}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+			fmt.Printf("User not found with email: %s\n", loginReq.Email)
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid email or password"})
 			return
 		}
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		fmt.Printf("Database error finding user: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
 		return
 	}
 
 	// Check password
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password))
 	if err != nil {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		fmt.Println("Password mismatch")
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid email or password"})
 		return
 	}
+
+	fmt.Println("Password verified, generating JWT token")
 
 	// Generate JWT token
 	token, err := generateJWT(user)
 	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		fmt.Printf("Error generating token: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to generate token"})
 		return
 	}
+
+	fmt.Println("JWT token generated successfully")
 
 	// Remove password from response
 	user.Password = ""
@@ -78,25 +95,33 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		User:  user,
 	}
 
+	fmt.Println("Sending login response")
 	json.NewEncoder(w).Encode(response)
 }
 
 // Register handles user registration
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	fmt.Println("Register request received")
 
 	var registerReq models.RegisterRequest
 	err := json.NewDecoder(r.Body).Decode(&registerReq)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		fmt.Printf("Error decoding register request: %v\n", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
 		return
 	}
 
 	// Validate input
 	if registerReq.Email == "" || registerReq.Password == "" || registerReq.Name == "" {
-		http.Error(w, "Name, email, and password are required", http.StatusBadRequest)
+		fmt.Println("Missing required fields in registration")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Name, email, and password are required"})
 		return
 	}
+
+	fmt.Printf("Registration attempt for email: %s\n", registerReq.Email)
 
 	// Check if user already exists
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -105,19 +130,27 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var existingUser models.User
 	err = h.collection.FindOne(ctx, bson.M{"email": registerReq.Email}).Decode(&existingUser)
 	if err == nil {
-		http.Error(w, "Email already in use", http.StatusConflict)
+		fmt.Printf("Email already in use: %s\n", registerReq.Email)
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Email already in use"})
 		return
 	} else if err != mongo.ErrNoDocuments {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		fmt.Printf("Database error checking existing user: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Database error"})
 		return
 	}
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(registerReq.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		fmt.Printf("Error hashing password: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to hash password"})
 		return
 	}
+
+	fmt.Println("Password hashed successfully")
 
 	// Create new user
 	now := time.Now()
@@ -128,21 +161,31 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Password:  string(hashedPassword),
 		CreatedAt: now,
 		UpdatedAt: now,
+		Location:  models.Location{}, // Initialize with empty location
 	}
 
 	// Insert user into database
 	_, err = h.collection.InsertOne(ctx, newUser)
 	if err != nil {
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		fmt.Printf("Error creating user in database: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to create user"})
 		return
 	}
+
+	fmt.Printf("User created successfully with ID: %s\n", newUser.ID.Hex())
+	fmt.Println("Generating JWT token")
 
 	// Generate JWT token
 	token, err := generateJWT(newUser)
 	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		fmt.Printf("Error generating token: %v\n", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to generate token"})
 		return
 	}
+
+	fmt.Println("JWT token generated successfully")
 
 	// Remove password from response
 	newUser.Password = ""
@@ -154,6 +197,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
+	fmt.Println("Sending registration response")
 	json.NewEncoder(w).Encode(response)
 }
 
@@ -162,20 +206,29 @@ func generateJWT(user models.User) (string, error) {
 	// Get JWT secret from environment
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		return "", fmt.Errorf("JWT_SECRET environment variable not set")
+		// Use a default secret if environment variable is not set
+		jwtSecret = "govtrack_jwt_secret_key_for_local_authentication"
+		fmt.Println("WARNING: Using default JWT secret. Set JWT_SECRET environment variable for production.")
 	}
 
-	// Create token with claims
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	// Set expiration time
+	expirationTime := time.Now().Add(time.Hour * 24 * 7) // 7 days
+
+	// Create claims with user data
+	claims := jwt.MapClaims{
 		"userId": user.ID.Hex(),
 		"email":  user.Email,
 		"name":   user.Name,
-		"exp":    time.Now().Add(time.Hour * 24 * 7).Unix(), // Token expires in 7 days
-	})
+		"exp":    expirationTime.Unix(),
+	}
+
+	// Create token with claims
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign token with secret
 	tokenString, err := token.SignedString([]byte(jwtSecret))
 	if err != nil {
+		fmt.Printf("Error signing token: %v\n", err)
 		return "", err
 	}
 

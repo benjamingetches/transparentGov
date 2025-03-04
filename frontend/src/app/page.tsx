@@ -153,15 +153,6 @@ export default function HomePage() {
     router.push('/login');
   };
 
-  // Function to clear auth state
-  const handleClearAuth = () => {
-    console.log('HomePage - Clear auth button clicked');
-    // Clear localStorage JWT token
-    localStorage.removeItem('jwt_token');
-    // Reload the page
-    window.location.reload();
-  };
-
   const handleNavigate = (path: string) => {
     router.push(path);
   };
@@ -224,18 +215,6 @@ export default function HomePage() {
             Get Started
           </Button>
         )}
-        <Button
-          variant="outlined"
-          color="primary"
-          size="small"
-          onClick={handleClearAuth}
-          sx={{
-            ml: 2,
-            textTransform: 'none',
-          }}
-        >
-          Clear Auth Data
-        </Button>
         <Button 
           variant="outlined" 
           size="large"

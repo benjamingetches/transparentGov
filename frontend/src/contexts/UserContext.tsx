@@ -174,28 +174,18 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setError(null);
   };
 
-  // Effect to create or get user when authenticated
+  // Effect to handle authentication state changes
   useEffect(() => {
-    console.log('UserContext - Authentication state changed effect');
+    console.log('UserContext - Auth state changed:', { isAuthenticated, jwtLoading });
     
-    if (jwtLoading) {
-      console.log('UserContext - JWT is still loading');
-      return;
-    }
-
-    if (!isAuthenticated) {
-      console.log('UserContext - User is not authenticated, clearing user');
-      clearUser();
-      return;
-    }
-
-    if (!user && !isLoading && !hasAttemptedUserCreation && jwtUser) {
-      console.log('UserContext - User is authenticated but no app user, creating one');
+    // Only attempt to create/get user if authenticated and not already loading
+    if (isAuthenticated && !jwtLoading && !isLoading && !user && !hasAttemptedUserCreation) {
+      console.log('UserContext - Auto-creating user');
       createOrGetUser().catch(err => {
-        console.error('UserContext - Error in automatic user creation:', err);
+        console.error('UserContext - Error auto-creating user:', err);
       });
     }
-  }, [isAuthenticated, jwtLoading, user, isLoading, hasAttemptedUserCreation, jwtUser]);
+  }, [isAuthenticated, jwtLoading, isLoading, user, hasAttemptedUserCreation]);
 
   // The context value
   const contextValue: UserContextType = {

@@ -168,13 +168,6 @@ const Navbar = () => {
                   >
                     <Typography textAlign="center">Profile</Typography>
                   </MenuItem>
-                  <MenuItem
-                    component={Link}
-                    href="/dashboard"
-                    onClick={handleCloseUserMenu}
-                  >
-                    <Typography textAlign="center">Dashboard</Typography>
-                  </MenuItem>
                   <MenuItem onClick={handleLogout}>
                     <Typography textAlign="center">Logout</Typography>
                   </MenuItem>

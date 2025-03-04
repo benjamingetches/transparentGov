@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useJwtAuth } from '@/components/auth/JwtProvider';
-import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert } from '@mui/material';
+import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert, FormHelperText } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -12,6 +12,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   // Redirect if already authenticated
   React.useEffect(() => {
@@ -20,27 +22,53 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, router]);
 
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setEmailError('Email is required');
+      return false;
+    } else if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      return false;
+    }
+    setEmailError(null);
+    return true;
+  };
+
+  const validatePassword = (password: string): boolean => {
+    if (!password) {
+      setPasswordError('Password is required');
+      return false;
+    }
+    setPasswordError(null);
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
-    // Basic validation
-    if (!email) {
-      setFormError('Email is required');
-      return;
-    }
-    if (!password) {
-      setFormError('Password is required');
+    // Validate all fields
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+
+    if (!isEmailValid || !isPasswordValid) {
       return;
     }
 
     try {
+      console.log('Login page - Attempting login with email:', email);
       await login(email, password);
+      console.log('Login page - Login successful, redirecting...');
     } catch (err) {
       console.error('Login page - Error during login:', err);
       // Error is handled by the auth provider
     }
   };
+
+  // Validate on blur
+  const handleEmailBlur = () => validateEmail(email);
+  const handlePasswordBlur = () => validatePassword(password);
 
   return (
     <Box
@@ -86,6 +114,9 @@ export default function LoginPage() {
             autoFocus
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onBlur={handleEmailBlur}
+            error={!!emailError}
+            helperText={emailError}
             disabled={isLoading}
           />
           <TextField
@@ -99,6 +130,9 @@ export default function LoginPage() {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onBlur={handlePasswordBlur}
+            error={!!passwordError}
+            helperText={passwordError}
             disabled={isLoading}
           />
           <Button

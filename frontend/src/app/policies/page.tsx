@@ -21,7 +21,6 @@ import {
   Alert,
   SelectChangeEvent
 } from '@mui/material';
-import Navbar from '@/components/layout/Navbar';
 import { useJwtAuth } from '@/components/auth/JwtProvider';
 import axios from 'axios';
 import { useRouter } from "next/navigation";
@@ -151,8 +150,6 @@ export default function PoliciesPage() {
 
   return (
     <div className="page-container">
-      <Navbar />
-      
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Typography variant="h3" component="h1" gutterBottom>
           Government Policies

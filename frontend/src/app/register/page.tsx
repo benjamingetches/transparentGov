@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert } from '@mui/material';
+import { Box, Button, TextField, Typography, Paper, CircularProgress, Alert, FormHelperText } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useJwtAuth } from '@/components/auth/JwtProvider';
@@ -15,6 +15,12 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Field-specific error states
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
 
   // Redirect if already authenticated
   React.useEffect(() => {
@@ -23,25 +29,83 @@ export default function RegisterPage() {
     }
   }, [isAuthenticated, router]);
 
+  // Validation functions
+  const validateName = (name: string): boolean => {
+    if (!name.trim()) {
+      setNameError('Name is required');
+      return false;
+    }
+    if (name.trim().length < 2) {
+      setNameError('Name must be at least 2 characters');
+      return false;
+    }
+    setNameError(null);
+    return true;
+  };
+
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) {
+      setEmailError('Email is required');
+      return false;
+    } else if (!emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      return false;
+    }
+    setEmailError(null);
+    return true;
+  };
+
+  const validatePassword = (password: string): boolean => {
+    if (!password) {
+      setPasswordError('Password is required');
+      return false;
+    }
+    if (password.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      return false;
+    }
+    // Check for at least one number and one letter
+    const hasNumber = /\d/.test(password);
+    const hasLetter = /[a-zA-Z]/.test(password);
+    if (!hasNumber || !hasLetter) {
+      setPasswordError('Password must contain at least one letter and one number');
+      return false;
+    }
+    setPasswordError(null);
+    return true;
+  };
+
+  const validateConfirmPassword = (confirmPassword: string): boolean => {
+    if (!confirmPassword) {
+      setConfirmPasswordError('Please confirm your password');
+      return false;
+    }
+    if (confirmPassword !== password) {
+      setConfirmPasswordError('Passwords do not match');
+      return false;
+    }
+    setConfirmPasswordError(null);
+    return true;
+  };
+
+  // Validate on blur
+  const handleNameBlur = () => validateName(name);
+  const handleEmailBlur = () => validateEmail(email);
+  const handlePasswordBlur = () => validatePassword(password);
+  const handleConfirmPasswordBlur = () => validateConfirmPassword(confirmPassword);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // Basic validation
-    if (!name) {
-      setError('Name is required');
-      return;
-    }
-    if (!email) {
-      setError('Email is required');
-      return;
-    }
-    if (!password) {
-      setError('Password is required');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
+    // Validate all fields
+    const isNameValid = validateName(name);
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+    const isConfirmPasswordValid = validateConfirmPassword(confirmPassword);
+
+    if (!isNameValid || !isEmailValid || !isPasswordValid || !isConfirmPasswordValid) {
       return;
     }
 
@@ -49,6 +113,8 @@ export default function RegisterPage() {
       setIsLoading(true);
       
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      console.log(`Attempting to register at ${apiUrl}/api/auth/register with email: ${email}`);
+      
       const response = await fetch(`${apiUrl}/api/auth/register`, {
         method: 'POST',
         headers: {
@@ -57,13 +123,30 @@ export default function RegisterPage() {
         body: JSON.stringify({ name, email, password }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Registration failed');
+      // Get the response as text first
+      const responseText = await response.text();
+      console.log(`Registration response status: ${response.status}`);
+      
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse response as JSON:', responseText);
+        throw new Error(`Server error: ${responseText.substring(0, 100)}...`);
       }
 
+      if (!response.ok) {
+        const errorMessage = data.error || 'Registration failed';
+        console.error('Registration error response:', data);
+        throw new Error(errorMessage);
+      }
+
+      console.log('Registration successful, attempting login');
+      
       // Registration successful, now login
       await login(email, password);
+      console.log('Login successful after registration, redirecting...');
       
       // Redirect is handled by the login function
     } catch (err) {
@@ -106,6 +189,18 @@ export default function RegisterPage() {
           </Alert>
         )}
 
+        <Box sx={{ width: '100%', mb: 2 }}>
+          <Alert severity="info">
+            <Typography variant="body2">
+              <strong>Password requirements:</strong>
+              <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
+                <li>At least 8 characters long</li>
+                <li>Must contain at least one letter and one number</li>
+              </ul>
+            </Typography>
+          </Alert>
+        </Box>
+
         <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
           <TextField
             margin="normal"
@@ -118,6 +213,9 @@ export default function RegisterPage() {
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onBlur={handleNameBlur}
+            error={!!nameError}
+            helperText={nameError}
             disabled={isLoading}
           />
           <TextField
@@ -130,6 +228,9 @@ export default function RegisterPage() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onBlur={handleEmailBlur}
+            error={!!emailError}
+            helperText={emailError}
             disabled={isLoading}
           />
           <TextField
@@ -143,6 +244,9 @@ export default function RegisterPage() {
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onBlur={handlePasswordBlur}
+            error={!!passwordError}
+            helperText={passwordError}
             disabled={isLoading}
           />
           <TextField
@@ -156,6 +260,9 @@ export default function RegisterPage() {
             autoComplete="new-password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
+            onBlur={handleConfirmPasswordBlur}
+            error={!!confirmPasswordError}
+            helperText={confirmPasswordError}
             disabled={isLoading}
           />
           <Button

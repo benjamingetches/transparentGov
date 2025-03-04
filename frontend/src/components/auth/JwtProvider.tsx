@@ -49,7 +49,13 @@ export const JwtProviderWithNavigate = ({ children }: { children: ReactNode }) =
   // Parse JWT token to get user information
   const parseJwt = (token: string): JwtUser | null => {
     try {
+      console.log('JwtProvider - Parsing JWT token');
       const base64Url = token.split('.')[1];
+      if (!base64Url) {
+        console.error('JwtProvider - Invalid token format (missing payload)');
+        return null;
+      }
+      
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
       const jsonPayload = decodeURIComponent(
         atob(base64)
@@ -57,14 +63,28 @@ export const JwtProviderWithNavigate = ({ children }: { children: ReactNode }) =
           .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
           .join('')
       );
-      const payload = JSON.parse(jsonPayload);
+      
+      const parsed = JSON.parse(jsonPayload);
+      console.log('JwtProvider - Parsed token payload:', {
+        userId: parsed.userId,
+        email: parsed.email,
+        name: parsed.name,
+        exp: parsed.exp ? new Date(parsed.exp * 1000).toISOString() : 'none'
+      });
+      
+      // Validate required fields
+      if (!parsed.userId || !parsed.email) {
+        console.error('JwtProvider - Token missing required fields');
+        return null;
+      }
+      
       return {
-        userId: payload.userId,
-        email: payload.email,
-        name: payload.name,
+        userId: parsed.userId,
+        email: parsed.email,
+        name: parsed.name || ''
       };
-    } catch (e) {
-      console.error('Error parsing JWT token:', e);
+    } catch (error) {
+      console.error('JwtProvider - Error parsing JWT:', error);
       return null;
     }
   };
@@ -124,6 +144,8 @@ export const JwtProviderWithNavigate = ({ children }: { children: ReactNode }) =
       setError(null);
       
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      console.log(`Attempting to login at ${apiUrl}/api/auth/login`);
+      
       const response = await fetch(`${apiUrl}/api/auth/login`, {
         method: 'POST',
         headers: {
@@ -132,19 +154,42 @@ export const JwtProviderWithNavigate = ({ children }: { children: ReactNode }) =
         body: JSON.stringify({ email, password }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
+      // Get the response as text first
+      const responseText = await response.text();
+      console.log(`Login response status: ${response.status}`);
+      
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse response as JSON:', responseText);
+        throw new Error(`Server error: ${responseText.substring(0, 100)}...`);
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        const errorMessage = data.error || 'Login failed';
+        console.error('Login error response:', data);
+        throw new Error(errorMessage);
+      }
+
       const { token: newToken } = data;
+      
+      if (!newToken) {
+        console.error('No token in response:', data);
+        throw new Error('No authentication token received');
+      }
       
       // Store token in localStorage
       localStorage.setItem('jwt_token', newToken);
       
       // Parse user data from token
       const userData = parseJwt(newToken);
+      
+      if (!userData) {
+        console.error('Failed to parse user data from token');
+        throw new Error('Invalid authentication token');
+      }
       
       setToken(newToken);
       setUser(userData);

@@ -44,7 +44,6 @@ import HowToVoteIcon from "@mui/icons-material/HowToVote";
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/layout/Navbar';
 import { useUser } from '@/contexts/UserContext';
 
 interface SavedPolicy {
@@ -278,14 +277,14 @@ export default function ProfilePage() {
       }
     };
 
-    if (appUser) {
+    if (appUser && !profile) {
       console.log('ProfilePage - App user found, fetching profile:', appUser);
       fetchProfile();
     } else if (!authLoading && !userLoading && !isAuthenticated) {
       console.log('ProfilePage - User not authenticated, not fetching profile');
       setLoading(false);
     }
-  }, [appUser, authLoading, userLoading, isAuthenticated, loading]);
+  }, [appUser, authLoading, userLoading, isAuthenticated, profile]);
 
   // Show error if there's a user error
   useEffect(() => {
@@ -462,8 +461,6 @@ export default function ProfilePage() {
 
   return (
     <div className="page-container">
-      <Navbar />
-      
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Paper sx={{ p: 3, mb: 4 }}>
           <Grid container spacing={3}>

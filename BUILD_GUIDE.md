@@ -1,5 +1,10 @@
 # GovTrack Build Guide
 
+REAL mF BUILD
+backend terminal: go run main.go
+frontend terminal: npm run dev
+
+
 ## Project Overview
 
 GovTrack is a web application that allows users to:

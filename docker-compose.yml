@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # MongoDB service
+  mongodb:
+    image: mongo:6.0
+    container_name: govtrack-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=govtrack
+    networks:
+      - govtrack-network
+
+  # Backend service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: govtrack-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/govtrack
+      - PORT=8080
+      - JWT_SECRET=${JWT_SECRET:-govtrack_jwt_secret_key_for_local_authentication}
+    networks:
+      - govtrack-network
+
+  # Frontend service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: govtrack-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8080
+    networks:
+      - govtrack-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  govtrack-network:
+    driver: bridge 
